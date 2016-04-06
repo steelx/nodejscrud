@@ -3,13 +3,15 @@ var express    = require('express');        // call express
 var app        = express();                 // define our app using express
 var bodyParser = require('body-parser');
 var mongodb   = require('mongodb');
-var dburl = 'mongodb://localhost:27017/contactsdb';
+var jwt    = require('jsonwebtoken'); // used to create, sign, and verify tokens
+var config = require('./config'); // get our config file
+
 var MongoClient = mongodb.MongoClient;
 var _ = require('lodash');//lodash underscore
 
 // configure app to use bodyParser()
 // this will let us get the data from a POST
-app.use(bodyParser.urlencoded({ extended: true }));
+app.use(bodyParser.urlencoded({ extended: false }));
 app.use(bodyParser.json());
 
 var port = process.env.PORT || 8080;        // set our port
@@ -39,7 +41,7 @@ router.route('/contacts')
     .post(function(req, res) {
         console.log('req.body', req.body);
 
-        MongoClient.connect(dburl, function(err, db){
+        MongoClient.connect(config.database, function(err, db){
             if (err) {res.send(err);}
 
             // Get the documents collection
@@ -72,11 +74,11 @@ router.route('/contacts')
     // get all the contacts (accessed at GET http://localhost:8080/api/contacts)
     .get(function(req, res) {
         // Connect to the DB
-        MongoClient.connect(dburl, function (err, db) {
+        MongoClient.connect(config.database, function (err, db) {
             if (err) {res.send(err);}
 
             // We are connected
-            console.log('Incoming GET req to ', dburl);
+            console.log('Incoming GET req to ', config.database);
 
             // Get the documents collection
             var collection = db.collection('contacts');
@@ -103,7 +105,7 @@ router.route('/contacts/:id')
     .get(function(req, res) {
         //console.log(req.params.id);
         // Connect to the DB
-        MongoClient.connect(dburl, function (err, db) {
+        MongoClient.connect(config.database, function (err, db) {
             if (err) {res.send(err);}
 
             // We are connected
@@ -126,7 +128,7 @@ router.route('/contacts/:id')
     // update the single contact (accessed at UPDATE http://localhost:8080/api/contacts/:id)
     .put(function(req, res) {
         // Connect to the DB
-        MongoClient.connect(dburl, function (err, db) {
+        MongoClient.connect(config.database, function (err, db) {
             if (err) {res.send(err);}
 
             // We are connected
@@ -151,7 +153,7 @@ router.route('/contacts/:id')
     // delete the single contact (accessed at DELETE http://localhost:8080/api/contacts/:id)
     .delete(function(req, res) {
         // Connect to the DB
-        MongoClient.connect(dburl, function (err, db) {
+        MongoClient.connect(config.database, function (err, db) {
             if (err) {res.send(err);}
 
             // We are connected
