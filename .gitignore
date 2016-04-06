@@ -27,6 +27,7 @@ build/Release
 # Dependency directories
 node_modules
 jspm_packages
+data
 
 # Optional npm cache directory
 .npm
@@ -128,5 +129,3 @@ com_crashlytics_export_strings.xml
 crashlytics.properties
 crashlytics-build.properties
 fabric.properties
-
-data/
