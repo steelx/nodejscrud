@@ -1,9 +1,38 @@
-var mongoose    = require('mongoose');
-var Schema = mongoose.Schema;
+var mongoose = require('mongoose');
+var bcrypt = require('bcrypt-nodejs');
 
-module.exports = mongoose.model('User', new Schema({
+var UserSchema = new mongoose.Schema({
     name: String,
     username: String,
     password: String,
     admin: Boolean
-}));
+});
+
+UserSchema.methods.comparePasswords = function (password, callback) {
+    bcrypt.compare(password, this.password, callback);
+};
+
+UserSchema.methods.toJSON = function () {
+    var user = this.toObject();
+    delete user.password;
+    return user;
+};
+
+UserSchema.pre('save', function (next) {
+    var user = this;
+
+    if(!user.isModified('password')) {return next();}
+
+    bcrypt.genSalt(10, function (err, salt) {
+        if(err) {return next(err);}
+
+        bcrypt.hash(user.password, salt, null, function (err, hash) {
+            if(err) {return next(err);}
+
+            user.password = hash;
+            next();
+        });
+    });
+});
+
+module.exports = mongoose.model('User', UserSchema);
