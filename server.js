@@ -2,7 +2,7 @@
 var express    = require('express');        // call express
 var app        = express();                 // define our app using express
 var bodyParser = require('body-parser');
-// var mongodb   = require('mongodb');
+
 var morgan   = require('morgan');
 var mongoose = require('mongoose');
 
@@ -52,36 +52,26 @@ router.get('/', function(req, res) {
 
 // more routes for our API will happen here
 
-router.route('/authenticate')
-    .post(function (req, res) {
+//POST username password to get token
+router.route('/login')
+    .post(function (req, res, next) {
         // find the user
         User.findOne({
             username: req.body.username
         }, function(err, user) {
 
-            if (err) throw err;
+            if (err) {return next(err);}
 
             if (!user) {
-                res.status(400).json({ message: 'Authentication failed. User not found.' });
+                return res.status(400).json({ message: 'Authentication failed. User not found.' });
             } else if (user) {
 
-                // check if password matches
-                if (user.password !== req.body.password) {
-                    res.status(400).json({ message: 'Authentication failed. Wrong password.' });
-                } else {
-
-                    // if user is found and password is right
-                    // create a token
-                    var token = jwt.sign(user, app.get('superSecret'), {
-                        expiresInMinutes: 1440 // expires in 24 hours
-                    });
-
-                    // return the information including token as JSON
-                    res.status(200).json({
-                        message: 'Enjoy your token!',
-                        token: token
-                    });
-                }
+                user.comparePasswords(req.body.password, function (err, isMatch) {
+                    if(err || !isMatch) {
+                        return res.status(400).json({ message: 'Authentication failed. Wrong password.' });
+                    }
+                    createToken(user, res);
+                });
 
             }
         });
@@ -120,47 +110,62 @@ protectedRouter.use(function(req, res, next) {
 
 // on routes that end in /contacts
 // ----------------------------------------------------
-router.route('/contacts')
-    // create a contacts route (accessed at POST http://localhost:8080/api/contacts)
-    .post(function(req, res) {
+router.route('/register')
+    // create a contacts route (accessed at POST http://localhost:8080/api/register)
+    .post(function(req, res, next) {
         // Get the documents collection
         console.log('Incoming POST req');
 
         User.findOne({
             username: req.body.username
         }, function(err, user) {
-
-            if (err) throw err;
+            var msg = 'Username already exists!';
+            if (err) return next(err);
 
             if (user) {
-                res.status(400).json({message: 'Username already exists!'});
+                return res.status(400).json({message: msg});
             }
 
             // Get the contact data passed from the form
-            var user = new User({
+            var newUser = new User({
                 name: req.body.name,
                 username: req.body.username,
-                password: req.body.password,
-                admin: req.body.isAdmin
+                password: req.body.password
             });
 
-            user.save(function (err, data) {
+            newUser.save(function (err) {
                 if (err) {
-                    res.send(err);
+                    return res.send(err);
                 }
                 // saved!
-                res.status(200).json(data)
+                res.status(200).send(newUser.toJSON());
             });
         });
 
-    })
+    });
+
+function createToken(user, res) {
+    var token = jwt.sign(user, app.get('superSecret'), {
+        expiresInMinutes: 1440 // expires in 24 hours
+    });
+
+    // return the information including token as JSON
+    res.status(200).json({
+        message: 'Enjoy your token!',
+        token: token,
+        isAdmin: !!user.admin
+    });
+}
+
 protectedRouter.route('/contacts')
     // get all the contacts (accessed at GET http://localhost:8080/api/contacts)
-    .get(function(req, res) {
+    .get(function(req, res, next) {
 
         User.find({}, function(err, users) {
-            if (err) {res.send(err);}
             var userMap = {};
+            if (err) {
+                return res.send(err);
+            }
 
             users.forEach(function(user) {
                 delete user.password;
@@ -172,10 +177,12 @@ protectedRouter.route('/contacts')
     });
 
 protectedRouter.route('/contacts/:id')
-    .get(function(req, res) {
+    .get(function(req, res, next) {
 
         User.find({ _id: new mongoose.Types.ObjectId(req.params.id)}, function(err, user) {
-            if (err) {res.send(err);}
+            if (err) {
+                return res.send(err);
+            }
 
             res.status(200).json(user);
         });
