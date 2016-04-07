@@ -2,19 +2,36 @@
 var express    = require('express');        // call express
 var app        = express();                 // define our app using express
 var bodyParser = require('body-parser');
-var mongodb   = require('mongodb');
+// var mongodb   = require('mongodb');
+var morgan   = require('morgan');
+var mongoose = require('mongoose');
+
+var _ = require('lodash');//lodash underscore
 var jwt    = require('jsonwebtoken'); // used to create, sign, and verify tokens
 var config = require('./config'); // get our config file
+var User = require('./models/User');
 
-var MongoClient = mongodb.MongoClient;
-var _ = require('lodash');//lodash underscore
+
+// =======================
+// configuration =========
+// =======================
+var port = process.env.PORT || 3000; // used to create, sign, and verify tokens
+mongoose.connect(config.database, function (error) {
+    if (error) {
+        console.log(error);
+    }
+}); // connect to database & initiate mongoose
+
+app.set('superSecret', config.secret); // secret variable
+
 
 // configure app to use bodyParser()
 // this will let us get the data from a POST
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(bodyParser.json());
 
-var port = process.env.PORT || 8080;        // set our port
+// use morgan to log requests to the console
+app.use(morgan('dev'));
 
 // ROUTES FOR OUR API
 // =============================================================================
@@ -41,135 +58,49 @@ router.route('/contacts')
     .post(function(req, res) {
         console.log('req.body', req.body);
 
-        MongoClient.connect(config.database, function(err, db){
+        // Get the documents collection
+        console.log('Incoming POST req');
+
+        // Get the contact data passed from the form
+        var user = new User({
+            name : req.body.name,
+            username : req.body.username,
+            password : req.body.password,
+            admin : req.body.isAdmin
+        });
+
+        user.save(function (err, data) {
             if (err) {res.send(err);}
-
-            // Get the documents collection
-            console.log('Incoming POST req');
-            var collection = db.collection('contacts');
-
-            // Get the contact data passed from the form
-            var contact = {
-                name : req.body.name,
-                email : req.body.email,
-                phone : req.body.phone
-            };
-
-            if(_.isEmpty(req.body)){
-                res.json({ error: 'res body empty.' });
-                db.close();
-            } else {
-                // Insert the student data into the database
-                collection.insert([contact], function (err){
-                    if (err) {res.send(err);}
-                    res.json({ message: 'Contact created!' });
-                    // Close the database
-                    db.close();
-                });
-            }
+            // saved!
+            res.status(200).json(data)
         });
 
     })
 
     // get all the contacts (accessed at GET http://localhost:8080/api/contacts)
     .get(function(req, res) {
-        // Connect to the DB
-        MongoClient.connect(config.database, function (err, db) {
+
+        User.find({}, function(err, users) {
             if (err) {res.send(err);}
+            var userMap = {};
 
-            // We are connected
-            console.log('Incoming GET req to ', config.database);
-
-            // Get the documents collection
-            var collection = db.collection('contacts');
-
-            // Find all students
-            collection.find({}).toArray(function (err, result) {
-                if (err) {
-                    res.send(err);
-                } else if (result.length) {
-                    console.log('contacts json sent');
-                    res.json(result);
-                } else {
-                    res.send('No contacts found');
-                }
-                //Close connection
-                db.close();
+            users.forEach(function(user) {
+                userMap[user._id] = user;
             });
+            res.status(200).json(userMap);
         });
 
     });
 
 router.route('/contacts/:id')
-    // get the single contact (accessed at GET http://localhost:8080/api/contacts/:id)
     .get(function(req, res) {
-        //console.log(req.params.id);
-        // Connect to the DB
-        MongoClient.connect(config.database, function (err, db) {
+
+        User.find({ _id: new mongoose.Types.ObjectId(req.params.id)}, function(err, user) {
             if (err) {res.send(err);}
 
-            // We are connected
-            console.log('Incoming GET req for ', req.params);
-
-            // Get the documents collection
-            db.collection('contacts').find({"_id": new mongodb.ObjectID(req.params.id)}).toArray(function(err, result){
-                if (err) {
-                    res.send(err);
-                } else if (result.length) {
-                    res.json(result);
-                } else {
-                    res.send('No contacts found');
-                }
-                //Close connection
-                db.close();
-            });
+            res.status(200).json(user);
         });
-    })
-    // update the single contact (accessed at UPDATE http://localhost:8080/api/contacts/:id)
-    .put(function(req, res) {
-        // Connect to the DB
-        MongoClient.connect(config.database, function (err, db) {
-            if (err) {res.send(err);}
 
-            // We are connected
-            console.log('Incoming PUT req for ', req.params);
-
-            // Get the documents collection
-            db.collection('contacts').updateOne(
-                {"_id": new mongodb.ObjectID(req.params.id)},
-                {
-                    $set: { "name": req.body.name, "email": req.body.email, "phone": req.body.phone },
-                    $currentDate: { "lastModified": true }
-                },
-                function(err, result) {
-                    if (err) {res.send(err);}
-
-                    res.json(result);
-                    db.close();
-                }
-            );
-        });
-    })
-    // delete the single contact (accessed at DELETE http://localhost:8080/api/contacts/:id)
-    .delete(function(req, res) {
-        // Connect to the DB
-        MongoClient.connect(config.database, function (err, db) {
-            if (err) {res.send(err);}
-
-            // We are connected
-            console.log('Incoming DELETE req for ', req.params);
-
-            // Get the documents collection
-            db.collection('contacts').deleteMany(
-                {"_id": new mongodb.ObjectID(req.params.id)},
-                function(err, result) {
-                    if (err) {res.send(err);}
-
-                    res.json(result);
-                    db.close();
-                }
-            );
-        });
     });
 
 // REGISTER OUR ROUTES -------------------------------
